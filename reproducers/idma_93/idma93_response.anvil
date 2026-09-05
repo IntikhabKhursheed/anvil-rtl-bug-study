@@ -1,0 +1,33 @@
+// Illustrative Anvil encoding of the response side of iDMA PR #93.
+// It is a semantic example; it has not been compiled in this repository.
+chan response_ch {
+  // 'right' means the right endpoint receives rsp; the handler owns left.
+  right rsp : (logic[2]@#1)
+}
+
+proc ErrorHandler(rsp_ep : left response_ch) {
+  reg state : logic[2];
+
+  loop {
+    // Model the error path.  `send` does not complete until the receiver
+    // executes the matching `recv`; only then may the state update start.
+    send rsp_ep.rsp(2'b01) >>
+    set state := 2'b10  // WAIT (or select WAIT_LAST_W before this sequence)
+  }
+}
+
+proc ResponseConsumer(rsp_ep : right response_ch) {
+  loop {
+    let response = recv rsp_ep.rsp >>
+    dprint "received response"(response) >>
+    cycle 1
+  }
+}
+
+// Complete top-level design used for compiler generation.
+proc Top() {
+  chan handler_ep -- consumer_ep : response_ch;
+  spawn ErrorHandler(handler_ep);
+  spawn ResponseConsumer(consumer_ep);
+  loop { cycle 1 }
+}
