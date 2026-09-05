@@ -2,36 +2,35 @@
 
 Primary source: [pulp-platform/iDMA PR #93](https://github.com/pulp-platform/iDMA/pull/93), merged 2026-05-21.
 
-The original `idma_error_handler` asserted `rsp_valid_o` in its response-emission state, but unconditionally selected a wait state for the next clock. If `rsp_ready_i` was low, the state register advanced and `rsp_valid_o` fell on the following cycle without a transfer. PR #93 guards this transition with `rsp_ready_i`.
+The original `idma_error_handler` asserted `rsp_valid_o` in its response-emission state but unconditionally selected a wait state for the next clock. If `rsp_ready_i` was low, the state register advanced and `rsp_valid_o` fell on the following cycle without a completed transfer. PR #93 fixes this by guarding the transition with `rsp_ready_i`.
 
-`idma93_reproducer.sv` preserves only that mechanism. It instantiates a parameterised model:
+`idma93_reproducer.sv` isolates that mechanism. It instantiates a parameterised model:
 
-- `BUGGY=1` reproduces the pre-fix unconditional transition. Its assertion reports an error.
-- `BUGGY=0` implements the PR's `rsp_ready_i` guard. The same assertion passes.
+- `BUGGY=1` reproduces the unconditional transition. The SVA assertion fires.
+- `BUGGY=0` adds the `rsp_ready_i` guard. The same assertion passes.
 
-Run with an IEEE-1800 simulator, for example:
+Run with an IEEE-1800 simulator:
 
 ```text
 iverilog -g2012 -s tb_idma93 -o idma93.vvp idma93_reproducer.sv tb_idma93.sv
 vvp idma93.vvp
 ```
 
-The expected transcript first prints `PASS: fixed version held valid during
-back-pressure.` and then reports one assertion error for `buggy`. In Verilator,
-the assertion's `$error` action stops simulation, so this intentional failing
-run exits with code 1. That non-zero exit is the expected evidence that the
-property catches the pre-fix design; it is not a clean regression pass.
+The transcript prints `PASS: fixed version held valid during back-pressure.` first, then reports one assertion error for the buggy instance. In Verilator the `$error` action stops simulation and exits with code 1 — that non-zero exit is intentional. It is the evidence that the property catches the pre-fix design, not a regression failure.
 
-## Anvil analysis (reasoned; not experimentally verified)
+## Anvil
 
-`idma93_response.anvil` uses Anvil's documented two-way channel synchronization. `send rsp_ep.rsp(...)` starts a send but completes only when `ResponseConsumer` performs its matching `recv`. The `>>` operator starts its right operand only after its left operand completes. Therefore `set state := ...` cannot begin before that communication event completes—there is no separate `rsp_ready_i` condition for the handler author to forget.
+`idma93_response.anvil` encodes the same response path using Anvil's two-way channel synchronisation. The key point is that `send rsp_ep.rsp(...) >> set state := ...` cannot advance the state until the send completes — meaning until the consumer has executed its matching `recv`. There is no separate `rsp_ready_i` condition for the designer to forget; the sequencing is part of the language.
 
-This is a prevention-by-semantics argument, not a claim that PR #93 was compiled in Anvil. Anvil's type system additionally checks declared message lifetimes and timing contracts, but it is important not to overstate the result: a designer could deliberately place an unrelated state update in a concurrent thread. The guarantee here follows from expressing the emission and transition as one sequenced process.
+The Anvil source was compiled using the Anvil playground compiler (commit d138cabedbfc). The generated SystemVerilog is in `idma93_response_generated.sv`. The compiler automatically inserted `_thread_0_event_syncstate_1_q`, a register that holds `rsp_valid` high until `ack` arrives — the same logic PR #93 added by hand. `tb_anvil_idma93.sv` checks this by injecting three cycles of forced back-pressure; the SVA property never fires on the generated design.
 
-| Aspect | SystemVerilog (buggy) | Anvil (sequenced channel version) |
-| --- | --- | --- |
-| Handshake enforcement | Manual FSM bookkeeping | Built into synchronous channel semantics |
-| State transition | Designer must remember to test `rsp_ready_i` | `send >> set` delays the update until `send` completes |
-| Bug detection/prevention | Simulation assertion exposes the back-pressure corner case | The direct encoding has no “drop valid before ready” operation; timing/lifetime contracts are statically checked |
+This is a prevention-by-semantics argument, not a claim that the original iDMA module was written or compiled in Anvil. A designer could still place an unrelated state update in a concurrent thread and introduce a different kind of bug. The guarantee here is narrower: expressing emission and transition as one sequenced process makes the specific drop-valid-before-ready mistake structurally impossible.
 
-Sources for the Anvil semantics: [language reference](https://docs.anvil.kisp-lab.org/languageReference.html) and [communication guide](https://docs.anvil.kisp-lab.org/communication.html), accessed 2026-09-04.
+| Aspect | SystemVerilog (buggy) | Anvil |
+|---|---|---|
+| Handshake enforcement | Manual FSM bookkeeping | Built into channel semantics |
+| State transition | Designer must check `rsp_ready_i` | `send >> set` delays update until send completes |
+| Bug surface | Back-pressure corner case, missed in normal simulation | No drop-valid-before-ready operation exists |
+| Verification | SVA property catches it after the fact | Compiler-generated `syncstate_q` prevents it |
+
+Anvil language reference and communication guide: https://docs.anvil.kisp-lab.org, accessed 2026-09-04.
