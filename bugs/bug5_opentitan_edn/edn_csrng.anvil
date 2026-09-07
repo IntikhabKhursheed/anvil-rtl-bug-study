@@ -1,0 +1,30 @@
+// Illustrative Anvil encoding: structural prevention argument
+// Not a claim that original OpenTitan EDN was written in Anvil
+chan csrng_cmd_ch {
+  // CSRNG receives a 32-bit command word through a synchronous channel.
+  right request : (logic[32]@#1)
+}
+
+proc Edn(cmd_ep : left csrng_cmd_ch) {
+  reg next_word : logic[32];
+  loop {
+    // This does not complete until CSRNG performs its matching recv.
+    send cmd_ep.request(*next_word) >>
+    // Therefore this write cannot overwrite an unaccepted command word.
+    set next_word := *next_word + 32'd1
+  }
+}
+
+proc Csrng(cmd_ep : right csrng_cmd_ch) {
+  loop {
+    // Waiting before recv makes this endpoint unavailable for three cycles.
+    // That back-pressures EDN without any externally forced signal.
+    cycle 3 >> let word = recv cmd_ep.request >> dprint "CSRNG word"(word)
+  }
+}
+
+proc Top() {
+  chan edn_ep -- csrng_ep : csrng_cmd_ch;
+  spawn Edn(edn_ep); spawn Csrng(csrng_ep);
+  loop { cycle 1 }
+}
