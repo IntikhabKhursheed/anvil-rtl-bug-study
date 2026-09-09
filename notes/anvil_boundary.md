@@ -1,7 +1,7 @@
 ## Paper Reference
 
 Anvil: A General-Purpose Timing-Safe Hardware Description Language
-Jason Zhijingcheng Yu, Aditya Ranjan Jha, Umang Mathur, 
+Jason Zhijingcheng Yu, Aditya Ranjan Jha, Umang Mathur,
 Trevor E. Carlson, Prateek Saxena
 ASPLOS 2026 / arXiv:2503.19447
 
@@ -21,8 +21,10 @@ Wait operator (Section 4.5):
 the evaluation of t2 begins"
 
 Scope (Section 9):
-"Anvil ensures safe use of values which are guaranteed to remain
-unchanged throughout their lifetimes"
+Anvil ensures safe use of values which are guaranteed to remain
+unchanged throughout their lifetimes. In this study, this guarantee
+did not extend to functional logic, per-ID state ownership, or
+parameter compatibility.
 
 # Anvil Guarantee Boundary
 
@@ -48,9 +50,9 @@ Anvil's core promise is timing safety. Concretely:
   is an implementation detail of the guarantee, not the
   guarantee itself.
 
-The important thing to note: these claims hold for
-communication expressed through Anvil channels. Anvil does
-not make every external RTL protocol automatically correct.
+These claims hold for communication expressed through Anvil
+channels. Anvil does not make every external RTL protocol
+automatically correct.
 
 ---
 
@@ -94,25 +96,32 @@ not make every external RTL protocol automatically correct.
 
 ## The Core Argument
 
-For Bugs 2 and 5, expressing the producer-consumer
-interface as an Anvil channel directly prevents the
-violation. The `send >> advance` sequencing makes it
-structurally impossible to move to the next word or
-state before the receiver has accepted the current one.
-That is exactly what both iDMA and EDN failed to do
-in their pre-fix SystemVerilog.
+For the two reproduced handshake cases, Anvil's blocking channel
+semantics and sequencing prevent the specific valid/ready stability
+violations observed in the original SystemVerilog designs. A send
+does not complete until the corresponding receiver performs recv,
+and operations sequenced after the communication cannot begin
+before that communication completes. Thus, the specific mechanisms
+that caused the iDMA and EDN failures cannot occur when the
+corresponding communication is expressed through Anvil channels.
 
-For Bugs 1, 3, and 4, the failure sits outside the
-channel model entirely. Bug 3 is the clearest example:
-the counter is read and written at valid times — there
-is no timing hazard — but the wrong counter is used for
-the wrong transaction. Anvil's scheduler sees correct
-timing and raises no objection.
+For Bugs 1, 3, and 4, the failure sits outside the channel model
+entirely. Bug 3 is the clearest example: the counter is read and
+written at valid times — there is no timing hazard — but the wrong
+counter is used for the wrong transaction. Anvil's type system sees
+correct timing and raises no objection.
 
-The boundary this draws is useful: Anvil covers
-communication hazards well. It does not cover
-state-management correctness, functional logic, or
-structural parameterization.
+---
+
+## Boundary Summary
+
+The study shows that Anvil's timing-safety guarantees address a
+specific and important class of communication hazards. The other
+three bugs demonstrate different limitations: parameter-width
+compatibility, per-transaction state isolation, and functional
+completeness are not established by timing safety alone. These
+properties require complementary techniques such as linting, SVA,
+formal verification, and functional testing.
 
 ---
 

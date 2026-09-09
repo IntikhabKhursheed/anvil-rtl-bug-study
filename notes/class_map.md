@@ -27,17 +27,22 @@ is not automatically correct for another.
 verilog-axi #44 (Section 4 exclusion list) — AXI-lite
 crossbar fails for M_ADDR_WIDTH below 12. Address-decode
 logic assumed a minimum width without enforcing it.
+Cited as a supporting example of the same class.
 
 **Detection:**
-Width-consistency lint / elaboration-time checks.
-Formal parameter range verification at instantiation.
-Cost: lint produces false positives on intentional
-truncations and needs waiver discipline in large designs.
+This class is better detected through width-consistency
+linting and elaboration-time checks. Formal verification
+can additionally check that supported parameter
+configurations preserve the required widths and ranges.
+A runtime SVA is not the primary detection mechanism
+here because the failure is structural — the incorrect
+width is established when the parameterized design is
+elaborated.
 
-**Anvil:** Does not prevent. Width parameters are a
-structural concern resolved at elaboration. Anvil's
-timing type system does not track parameter compatibility
-across module boundaries.
+**Anvil:** This failure is a parameterization and
+elaboration-time problem. It is outside the timing-safety
+property studied here and is therefore not prevented by
+Anvil's timing-safety mechanism.
 
 ---
 
@@ -68,6 +73,7 @@ asserts ready=1 and the handshake completes.
 pulp-platform/axi (Section 4 exclusion list) — B and R
 payloads changed value between valid assertion and the
 completing handshake. Same invariant, third design.
+Cited as a supporting example of the same class.
 
 **Detection:**
 SVA valid-stability property:
@@ -83,12 +89,12 @@ Cost: property requires knowledge of which signal pairs
 form a handshake. False positives possible if data is
 intentionally pipelined without a registered channel.
 
-**Anvil:** Prevents — for interfaces expressed as Anvil
-channels. The `send >> next_action` sequencing means
-next_action cannot begin before the receiver performs
-its matching `recv`. The compiler generates synchronization
-state that holds the offered value stable during stalls.
-This makes the specific mechanism of both bugs structurally
+**Anvil:** For interfaces expressed as Anvil channels,
+the `send >> next_action` sequencing means next_action
+cannot begin before the receiver performs its matching
+`recv`. The compiler generates synchronization state
+that holds the offered value stable during stalls. This
+makes the specific mechanism of both bugs structurally
 impossible to write.
 
 ---
@@ -113,10 +119,11 @@ position cannot be shared across concurrent transactions
 with different IDs.
 
 **Second independent instance:**
-OpenCores uart16550 tf_push (Section 4 exclusion list) —
-data latched one cycle after write-enable; state shared
-between timing contexts. Related shared-state failure in
-a different peripheral domain.
+No second independent instance is claimed for this class.
+The assignment exclusion list contains buffering and
+timing-related bugs but none with a confirmed per-ID
+shared-state isolation mechanism matching this class
+precisely.
 
 **Detection:**
 SVA relating each response ID to its own stored burst count:
@@ -133,15 +140,17 @@ Cost: property requires a reference model tracking
 per-ID expected offset. Runtime overhead proportional
 to number of active IDs.
 
-**Anvil:** Does not prevent. The counter is read and
-written at valid times — there is no timing hazard for
-Anvil to catch. The fault is that the same mutable
-counter is reused across logically independent contexts.
-Anvil's type system does not assign ownership of a
-register to a transaction ID, and it does not verify
-that per-ID isolation is maintained. A timing-safe
-Anvil design could still declare one counter and reuse
-it for all IDs without the compiler objecting.
+**Anvil:** This bug is outside the timing-safety property
+demonstrated by Anvil. The counter can be accessed at
+valid and well-defined times while still being associated
+with the wrong transaction ID. The failure is one of
+state-management and per-transaction isolation rather
+than timing safety. Anvil's timing guarantees do not
+establish that each transaction ID uses an independent
+state element or that a shared counter is associated with
+the correct transaction context. A timing-safe Anvil
+design could still declare one counter and reuse it for
+all IDs without the compiler objecting.
 
 ---
 
@@ -167,23 +176,29 @@ is a functional omission regardless of how well the
 rest of the design is verified.
 
 **Second independent instance:**
-Ibex #1018 (Section 4 exclusion list) — shift decoder
-ignored instruction bits 25-26, so reserved encodings
-executed instead of trapping. A valid instruction
-encoding reached the wrong branch in a decode case.
+Ibex #1018 (Section 4 exclusion list) — a related
+decode/specification-conformance failure in which reserved
+encodings were incorrectly accepted rather than trapped.
+Cited as a supporting functional-omission example only.
+It is not claimed to have the identical case-statement
+mechanism as CVFPU Bug 4.
 
 **Detection:**
-The `unique case` construct causes a simulation error
-if any value reaches no branch. Formal case-coverage
-analysis proves all enum values are handled.
-Cost: `unique case` may conflict with X-propagation
-in gate-level simulation; needs careful scoping.
+This class can be detected using unique case checks, lint
+rules for incomplete case statements, and formal case
+coverage. Operation-specific regression tests are also
+important because a missing case branch may remain
+unnoticed if the corresponding operation is never
+exercised. The appropriate mechanism depends on whether
+the goal is structural detection of an incomplete case
+or behavioral verification of the resulting operation.
 
-**Anvil:** Does not prevent. Functional correctness of
-what an operation computes is outside Anvil's type
-system. A case statement with a missing branch compiles
-and runs in Anvil just as it would in SystemVerilog,
-provided the timing is safe.
+**Anvil:** This is a functional-logic omission rather
+than a timing hazard. Anvil's timing-safety guarantees
+do not establish that every operation encoding is handled
+by every relevant case statement. A case statement with
+a missing branch compiles and runs in Anvil just as it
+would in SystemVerilog, provided the timing is safe.
 
 ---
 
@@ -191,12 +206,25 @@ provided the timing is safe.
 
 | Class | Bugs | SVA | Lint | Formal | Anvil |
 |-------|------|-----|------|--------|-------|
-| Width/parameterization | 1 | Partial | YES | YES | NO |
+| Width/parameterization | 1 | No | YES | YES | NO |
 | Handshake/protocol | 2, 5 | YES | NO | YES | YES |
 | Shared state/per-ID | 3 | YES | NO | YES | NO |
 | Incomplete case | 4 | Partial | YES | YES | NO |
 
-Three of the four classes resist Anvil entirely.
-One class — handshake/protocol — is within Anvil's
-prevention boundary, and two independent real bugs
-confirm it.
+---
+
+## Closing Synthesis
+
+The five bugs show that Anvil's guarantee is narrow but
+deep. It provides a strong static guarantee for timing
+safety through its type system and timing contracts, but
+it does not replace verification of functional correctness,
+parameter compatibility, or logical state ownership.
+
+Bugs 2 and 5 demonstrate the positive boundary: both
+violations arise from producer-consumer communication
+under back-pressure, and both mechanisms are prevented
+when expressed using Anvil's blocking communication
+semantics. Bugs 1, 3, and 4 demonstrate the negative
+boundary: their failures concern parameterization, state
+ownership, and functional logic rather than timing safety.
