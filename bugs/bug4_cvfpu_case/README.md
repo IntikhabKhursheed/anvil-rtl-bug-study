@@ -61,10 +61,12 @@ statements consuming that type. The invariant violated:
 every valid value of an operation enum must be handled
 explicitly in every case statement that dispatches on it.
 
-Second independent instance: Ibex #1018 (exclusion list) —
-shift decoder ignored instruction bits 25-26, so reserved
-encodings executed instead of trapping. Same class: a
-valid input encoding silently fell through to wrong behavior.
+Second independent instance: Ibex #1018 (Section 4 exclusion
+list) — a related decode/specification-conformance failure in
+which reserved encodings were incorrectly accepted rather than
+trapped. Cited as a supporting functional-omission example only.
+It is not claimed to have the identical case-statement mechanism
+as this bug.
 
 ## Detection
 

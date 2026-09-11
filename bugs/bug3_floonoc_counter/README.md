@@ -47,7 +47,8 @@ ID has isolated state, or verifies the functional arithmetic in
 `rob_addr = rob_base + burst_count`. Consequently, a timing-safe Anvil design
 could still declare one counter and reuse it for all incoming IDs.
 
-This bug therefore identifies a useful limit of Anvil's claim: explicit timing
+This bug identifies an important boundary of the timing-safety
+property Anvil demonstrates: explicit timing
 contracts can prevent timing hazards, but they do not by themselves prove
 protocol-level, per-transaction functional invariants. The appropriate defence
 is an SVA or formal property that relates each response ID to its own stored

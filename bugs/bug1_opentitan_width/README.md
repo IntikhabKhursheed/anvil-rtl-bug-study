@@ -52,16 +52,15 @@ logic assumed a minimum width.
 
 ## Detection
 
-```systemverilog
-// SVA: output width must match intended data width
-assert property (@(posedge clk)
-    $bits(adv_data_o) == KmacAdvDataWidth)
-else $error("adv_data width mismatch");
-```
+SVA is not the primary detection mechanism for this class.
 
-Lint rule: enable `-Wwidth` and treat as error. Cost: false
-positives on intentional truncations; requires waiver discipline.
-Formal: parameter range check at elaboration time.
+This class is better detected through **width-consistency linting and elaboration/compile-time checks**. The incorrect width is structural and is established when the design is elaborated.
+
+A runtime SVA is not the primary detection mechanism because the failure is a **static width mismatch**, rather than a temporal behavior that occurs at runtime.
+
+**Lint:** Enable width-mismatch checks (for example, `-Wwidth` where supported) and treat relevant warnings as errors. Cost: false positives for intentional truncations; requires waiver discipline.
+
+**Formal:** Formal verification can additionally check supported parameter configurations and verify that the resulting interface behavior remains correct, but it is not the primary mechanism for detecting the width mismatch itself.
 
 ## Anvil
 
