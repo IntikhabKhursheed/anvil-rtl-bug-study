@@ -214,7 +214,7 @@ anvil-rtl-bug-study/
 │
 ├── notes/
 │   ├── anvil_boundary.md
-│   └── discussion_prep.md
+│   └── class_map.md
 │
 ├── sources.md
 ├── search-log.md
@@ -267,6 +267,6 @@ https://docs.anvil.kisp-lab.org/
 
 **Intikhab Khursheed**
 
-Web Developer / Software Engineer
+Software Engineer with research interest in hardware verification and timing-safe HDL design
 
 This repository is maintained as an independent study of real-world RTL bugs, their detection, and the applicability of Anvil's type-system guarantees.
