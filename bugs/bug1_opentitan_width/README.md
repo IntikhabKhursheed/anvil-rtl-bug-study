@@ -1,72 +1,57 @@
-# OpenTitan keymgr_dpe #25994: width truncation via shared parameter
+# OpenTitan keymgr_dpe #25994: Width Truncation via Shared Parameter
 
-Primary source: Issue #25994 + PR #26055
-https://github.com/lowRISC/opentitan/issues/25994
+**Primary source:** Issue #25994 + PR #26055
 
 ## Instance
 
-keymgr_dpe is OpenTitan's Dice Protection Environment key manager.
-It derives and manages cryptographic keys across multiple boot stages
-using a slot-based architecture. Its advance operation sends key
-material to KMAC for mixing.
+`keymgr_dpe` is OpenTitan's Dice Protection Environment key manager. It derives and manages cryptographic key material across different DPE contexts. Its advance operation prepares data for cryptographic processing through KMAC.
+
+The bug was caused by using a shared `AdvDataWidth` parameter that was correct for the standard key manager path but too narrow for the DPE path.
 
 ## Mechanism
 
-The keymgr and keymgr_dpe modules shared a single `AdvDataWidth`
-parameter set to 1152 bits — the correct width for the standard
-keymgr advance path. The DPE path requires 1664 bits to accommodate
-its additional slot data. Because both modules used the same parameter,
-the DPE advance data was silently truncated by 512 bits before
-reaching KMAC. No error was raised; SystemVerilog silently
-zero-extends or truncates on width mismatch.
+The shared `AdvDataWidth` parameter was set to 1152 bits, while the DPE advance path required 1664 bits because of its additional data. This resulted in a 512-bit width mismatch in the DPE data path.
 
 ```systemverilog
-// Pre-fix — shared parameter, wrong for DPE:
+// Before — shared parameter
 parameter int AdvDataWidth = 1152;
-logic [AdvDataWidth-1:0] adv_data; // 512 bits missing
+logic [AdvDataWidth-1:0] adv_data;
 
-// Fix — separate parameter:
+// After — separate DPE width
 parameter int KmacAdvDataWidth = 1664;
 logic [KmacAdvDataWidth-1:0] adv_data;
 ```
 
-## Why it survived
+When a wider value is assigned to a narrower packed vector, SystemVerilog permits the assignment and truncates the value to the destination width. In this case, the upper 512 bits of the DPE advance data were therefore lost.
 
-Width truncation in SystemVerilog is silent by default. The
-simulator does not raise an error when a wider signal is assigned
-to a narrower one — it simply drops the upper bits. Lint tools
-report `-Wwidth` warnings but these are frequently suppressed in
-large codebases. The truncation only affects the DPE path, which
-has different test coverage than the standard keymgr path.
+## Why It Survived
+
+The width mismatch does not necessarily produce a runtime error. SystemVerilog permits assignments between differently sized packed vectors, so ordinary simulation can continue while the incorrect width remains in the design.
+
+The problem was also specific to the DPE advance path. Tests exercising the standard key manager path could pass without exposing the incorrect DPE width.
 
 ## Class
 
-**Width/parameterization** — a shared parameter assumes a fixed
-data width that is incorrect for one consumer. The invariant
-violated: every module consuming a shared parameter must be
-verified to have compatible width requirements.
+**Width / parameterization**
 
-Second independent instance: verilog-axi #44 (exclusion list) —
-AXI-lite crossbar fails for M_ADDR_WIDTH below 12; address-decode
-logic assumed a minimum width.
+The violated invariant is that every consumer of a shared parameter must have compatible width requirements. A parameter that is correct for one design path cannot be assumed to be correct for another path with different data requirements.
+
+A related example from the assignment's exclusion list is **verilog-axi #44**, where address-decode logic assumed a minimum address width. It is included only as a supporting example of the same general class, not as one of the five studied bugs.
 
 ## Detection
 
-SVA is not the primary detection mechanism for this class.
+This class is primarily detected using structural checks rather than runtime assertions.
 
-This class is better detected through **width-consistency linting and elaboration/compile-time checks**. The incorrect width is structural and is established when the design is elaborated.
+* **Lint:** Width-mismatch checks can identify assignments where source and destination widths differ. Relevant warnings can be treated as errors.
+* **Elaboration / compile-time checks:** Parameter constraints can be checked for supported configurations.
+* **Formal verification:** Formal analysis can verify selected parameter configurations and detect incorrect behavior resulting from unsupported or inconsistent widths.
 
-A runtime SVA is not the primary detection mechanism because the failure is a **static width mismatch**, rather than a temporal behavior that occurs at runtime.
-
-**Lint:** Enable width-mismatch checks (for example, `-Wwidth` where supported) and treat relevant warnings as errors. Cost: false positives for intentional truncations; requires waiver discipline.
-
-**Formal:** Formal verification can additionally check supported parameter configurations and verify that the resulting interface behavior remains correct, but it is not the primary mechanism for detecting the width mismatch itself.
+An SVA property is not the primary detector because the incorrect width is established structurally during elaboration. An assertion may detect a consequence of the mismatch, but it does not replace structural width checking.
 
 ## Anvil
 
-Anvil does not prevent this bug. Width parameters are a
-structural/elaboration-time property. Anvil's type system
-enforces timing safety — that values are stable when read —
-but it does not verify that a parameter used across modules
-produces compatible bit widths. A designer using Anvil would
-still need to specify correct widths manually.
+**Anvil does not prevent this bug.**
+
+The failure is a width and parameterization problem rather than a timing-safety problem. Anvil's type system provides guarantees about the timing and ordering of communication, but it does not establish that independently selected parameters produce compatible bit widths across different consumers.
+
+A design expressed in Anvil would therefore still require appropriate structural width checking through linting or elaboration-time checks.
