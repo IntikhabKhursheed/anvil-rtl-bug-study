@@ -88,7 +88,7 @@ automatically correct.
 |-----|--------|-------|-------|
 | Bug 1 | OpenTitan keymgr_dpe #25994 | Width/parameterization | NO |
 | Bug 2 | iDMA PR #93 | Handshake/protocol | YES |
-| Bug 3 | FlooNoC floo_simple_rob 1d801a0 | Shared state/per-ID isolation | NO |
+| Bug 3 | common_cells PR #322 | FIFO pointer advancement | PARTIAL |
 | Bug 4 | CVFPU PR #122 | Incomplete case/functional logic | NO |
 | Bug 5 | OpenTitan EDN #15469 | Handshake/protocol | YES |
 
@@ -105,23 +105,25 @@ before that communication completes. Thus, the specific mechanisms
 that caused the iDMA and EDN failures cannot occur when the
 corresponding communication is expressed through Anvil channels.
 
-For Bugs 1, 3, and 4, the failure sits outside the channel model
-entirely. Bug 3 is the clearest example: the counter is read and
-written at valid times — there is no timing hazard — but the wrong
-counter is used for the wrong transaction. Anvil's type system sees
-correct timing and raises no objection.
+Bug 3 sits on the boundary. Anvil can express the intended FIFO
+ordering as `recv >> advance_write_pointer` and
+`send >> advance_read_pointer`, so a pointer update written after its
+channel operation cannot happen first. But Anvil does not know that an
+arbitrary register is a FIFO pointer, and it does not prohibit a
+designer from updating that register before the channel operation.
+The result is partial risk reduction, not a universal proof of FIFO
+bookkeeping correctness. Bugs 1 and 4 remain outside the channel model.
 
 ---
 
 ## Boundary Summary
 
 The study shows that Anvil's timing-safety guarantees address a
-specific and important class of communication hazards. The other
-three bugs demonstrate different limitations: parameter-width
-compatibility, per-transaction state isolation, and functional
-completeness are not established by timing safety alone. These
-properties require complementary techniques such as linting, SVA,
-formal verification, and functional testing.
+specific and important class of communication hazards. The width and
+functional-omission cases remain outside that guarantee. The FIFO case
+shows a narrower boundary inside the handshake class: safe channel
+sequencing helps, but it does not replace explicit verification of
+internal resource bookkeeping.
 
 ---
 
@@ -133,8 +135,8 @@ All four bug classes need verification beyond Anvil:
   formal elaboration checks
 - Handshake/protocol: SVA valid-stability property
   (catches the same bugs in plain SystemVerilog)
-- Shared state/per-ID isolation: SVA relating each
-  response ID to its own stored burst count
+- FIFO bookkeeping: SVA or formal checks that pointers move only on
+  the corresponding handshake and that data is conserved
 - Incomplete case: unique case construct,
   formal case-coverage analysis
 
