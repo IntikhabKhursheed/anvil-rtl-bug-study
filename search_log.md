@@ -187,6 +187,32 @@ Bug 2 itself is accepted.
 
 ---
 
+## 2026-09-13 — Bug 3 replacement: common_cells FIFO pointer advancement
+
+The original FlooNoC shared-counter candidate was archived because no
+adequately documented second independent instance could be established.
+Its files remain in `bugs/archive/bug3_floonoc_counter_shared_state/` for
+research record only; it is no longer one of the five selected bugs.
+
+Verified common_cells PR #322 directly on GitHub. The merged PR records
+that `passthrough_stream_fifo` pointer updates used `valid_i` or `ready_i`
+alone, so a push while full or a pop while empty could corrupt FIFO state
+when assertions were disabled or in synthesized netlists. The fix gates
+write-pointer movement on `valid_i && ready_o` and read-pointer movement on
+`ready_i && valid_o`.
+
+The naming difference was also checked: v1 used
+`passthrough_stream_fifo`; the v2 changelog records the public-module
+`cc_` prefix and lists `cc_passthrough_stream_fifo` under fixed pointer
+updates. The PR preserves simultaneous push/pop when full.
+
+**Decision: ACCEPTED — replacement Bug 3.**
+Reason: merged primary fix, exact RTL mechanism, a minimal valid/ready
+reproducer, and two independent supporting instances in iDMA PR #93 and
+OpenTitan EDN #15469.
+
+---
+
 ## Reproducer Summary
 
 Three of the five selected bugs were successfully reproduced
@@ -195,12 +221,12 @@ in standalone SystemVerilog simulations.
 | Reproducer | Bug | Anvil | Official? |
 |------------|-----|-------|-----------|
 | iDMA PR #93 | Bug 2 | YES | YES |
-| FlooNoC floo_simple_rob | Bug 3 | NO | Supporting |
+| common_cells passthrough FIFO | Bug 3 | PARTIAL | Supporting |
 | OpenTitan EDN #15469 | Bug 5 | YES | YES |
 
-Bug 3 retained as supporting evidence — demonstrates an
-important negative case: a design can be timing-safe while
-still violating per-transaction state isolation.
+Bug 3 now demonstrates that Anvil channel sequencing reduces risk of
+handshake-gated FIFO pointer updates but does not prove arbitrary FIFO
+bookkeeping correct.
 
 ---
 
@@ -210,12 +236,12 @@ still violating per-transaction state isolation.
 |-----|--------|-------|----------|
 | 1 | OpenTitan keymgr_dpe #25994 | Width/parameterization | ACCEPTED |
 | 2 | iDMA PR #93 | Handshake/protocol | ACCEPTED |
-| 3 | FlooNoC floo_simple_rob | Shared state/per-ID isolation | ACCEPTED |
+| 3 | common_cells PR #322 | Handshake-gated FIFO pointer advancement | ACCEPTED |
 | 4 | CVFPU PR #122 | Incomplete case/functional omission | ACCEPTED |
 | 5 | OpenTitan EDN #15469 | Handshake/protocol | ACCEPTED |
 
 All five bugs are outside the assignment's exclusion list.
-The set covers four distinct bug classes with two independent
-instances of the handshake/protocol class. Three reproduced
-bugs provide both positive and negative evidence for evaluating
-Anvil's timing-safety boundary.
+The set covers three distinct bug classes with three independent
+instances of the handshake/protocol class. Three reproduced bugs
+provide positive and partial-boundary evidence for evaluating Anvil's
+timing-safety claims.

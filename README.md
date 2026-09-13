@@ -10,15 +10,15 @@ The study examines how each bug occurred, why it was able to survive existing ve
 
 ## Overview
 
-RTL bugs do not all come from the same source. Some are caused by incorrect handshake behavior, while others result from parameter mismatches, shared state, or incomplete functional logic.
+RTL bugs do not all come from the same source. Some are caused by incorrect handshake behavior, while others result from parameter mismatches or incomplete functional logic.
 
-This study focuses on five documented bugs covering four different classes:
+This study focuses on five documented bugs covering three different classes:
 
 | # | Design                    | Bug                             | Class                           | Anvil |
 | - | ------------------------- | ------------------------------- | ------------------------------- | ----- |
 | 1 | OpenTitan `keymgr_dpe`    | Width truncation                | Width / parameterization        | ❌     |
 | 2 | iDMA                      | Valid/ready FSM violation       | Handshake / protocol            | ✅     |
-| 3 | FlooNoC `floo_simple_rob` | Shared burst counter            | Shared state / per-ID isolation | ❌     |
+| 3 | common_cells FIFO         | Pointer advances without transfer | Handshake / protocol          | ◐     |
 | 4 | CVFPU                     | Incomplete `ADDS` case handling | Functional omission             | ❌     |
 | 5 | OpenTitan EDN             | Back-pressure violation         | Handshake / protocol            | ✅     |
 
@@ -78,16 +78,16 @@ The bug is reproduced in a standalone SystemVerilog model with injected back-pre
 
 ---
 
-### Bug 3 — FlooNoC `floo_simple_rob`
+### Bug 3 — common_cells `passthrough_stream_fifo`
 
-**Class:** Shared state / per-ID isolation
-**Anvil:** ❌ Not prevented
+**Class:** Handshake / protocol
+**Anvil:** ◐ Partially reduced
 
-A shared burst counter is used across interleaved transaction contexts. When multiple IDs progress concurrently, one transaction can affect the state used to calculate another transaction's reorder-buffer address.
+A FIFO write pointer advances on `valid_i` alone, even when the input is rejected because the FIFO is full. The pointer must change only after a completed valid/ready transfer.
 
-A standalone reproducer demonstrates the difference between the shared-counter implementation and an implementation with independent per-context state.
+A standalone reproducer fills a two-entry FIFO and then attempts one rejected push. The buggy pointer changes; the fixed pointer holds its value.
 
-**Source:** FlooNoC v0.6.0 / associated fix commit.
+**Source:** common_cells PR #322 and Issue #264.
 
 ---
 
@@ -141,7 +141,7 @@ Check violated invariant with SVA
 
 Two bugs are used as the primary standalone reproductions required by the study.
 
-The repository also contains a supporting FlooNoC reproduction used to investigate the shared-state failure mechanism.
+The repository contains three standalone reproduction models.
 
 ---
 
@@ -178,7 +178,6 @@ They occur in different designs and through different RTL mechanisms, but both i
 The remaining bugs represent different classes:
 
 * **Width / parameterization** — Bug 1
-* **Shared state / transaction isolation** — Bug 3
 * **Functional completeness** — Bug 4
 
 These properties are not established by Anvil's communication type system and therefore require other verification techniques.
@@ -193,7 +192,6 @@ Different bug classes require different forms of checking.
 | ------------------------ | -------------------------------------------------------------- |
 | Handshake / protocol     | SVA, formal verification, protocol checking                    |
 | Width / parameterization | Linting, elaboration checks, parameterized testing             |
-| Shared state / isolation | SVA, formal verification, reference models                     |
 | Functional omission      | Regression tests, coverage, `unique case`, formal verification |
 
 The purpose of this comparison is to show where each technique provides useful coverage rather than treating any single technique as sufficient for all RTL bugs.
@@ -208,7 +206,8 @@ anvil-rtl-bug-study/
 ├── bugs/
 │   ├── bug1_opentitan_width/
 │   ├── bug2_idma_fsm/
-│   ├── bug3_floonoc_counter/
+│   ├── bug3_common_cells_fifo/
+│   ├── archive/bug3_floonoc_counter_shared_state/
 │   ├── bug4_cvfpu_case/
 │   └── bug5_opentitan_edn/
 │
@@ -231,7 +230,7 @@ Primary sources and supporting references are recorded in [`sources.md`](sources
 
 * OpenTitan issues and pull requests
 * iDMA pull request #93
-* FlooNoC source and fix information
+* common_cells PR #322 and Issue #264
 * CVFPU pull request #122
 * Anvil documentation
 * Anvil research paper

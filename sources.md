@@ -31,21 +31,18 @@ under back-pressure.
 
 ---
 
-## Bug 3 — FlooNoC floo_simple_rob shared burst counter
+## Bug 3 — common_cells passthrough FIFO pointer advancement
 
 | Label | URL | Identifier | Date accessed | Role |
 |-------|-----|------------|---------------|------|
-| FlooNoC v0.6.0 release notes | https://github.com/pulp-platform/FlooNoC/releases/tag/v0.6.0 | v0.6.0 | 2026-09-05 | P, M |
-| FlooNoC commit 1d801a0 | https://github.com/pulp-platform/FlooNoC/tree/1d801a0b92af5fce6e35232d4f03327c91243bf7 | commit 1d801a0 | 2026-09-05 | M |
+| common_cells PR #322 | https://github.com/pulp-platform/common_cells/pull/322 | PR #322, merged 2026-06-30 | 2026-09-13 | P, M |
+| common_cells Issue #264 | https://github.com/pulp-platform/common_cells/issues/264 | Issue #264 | 2026-09-13 | P (context) |
+| common_cells v2 changelog | https://github.com/pulp-platform/common_cells/blob/master/CHANGELOG.md | v2.0.0-beta | 2026-09-13 | M |
 
-Note: commit 1d801a0 documents the identical mechanism in
-floo_simple_rob.sv including the developer's own WARNING comment
-and NoBurstSupport assertion.
-
-No second independent instance is claimed for this class.
-The assignment exclusion list contains buffering and timing-related
-bugs but none with a confirmed per-ID shared-state isolation
-mechanism matching this class precisely.
+Second independent instances (S): iDMA PR #93 (Bug 2) and OpenTitan
+EDN #15469 (Bug 5). All three advance protocol-visible state without
+a completed valid/ready transfer: an FSM state, a payload, or a FIFO
+pointer. They are separate designs with different immediate mechanisms.
 
 ---
 
@@ -74,10 +71,8 @@ as this bug.
 | AnvilHDL communication guide | https://docs.anvil.kisp-lab.org/communication.html | — | 2026-09-07 | A |
 | Anvil paper | https://arxiv.org/abs/2503.19447 | arXiv:2503.19447 | 2026-09-08 | A |
 
-No second independent instance is claimed for this class.
-The connection to iDMA PR #93 (Bug 2) is made in the closing
-synthesis: both belong to the handshake/protocol class but
-violate different aspects of the valid/ready stability invariant.
+Second independent instance (S): common_cells PR #322 (Bug 3), which
+advances FIFO pointer state without a completed valid/ready transfer.
 
 ---
 
