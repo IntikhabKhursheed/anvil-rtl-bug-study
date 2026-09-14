@@ -1,0 +1,40 @@
+// Illustrative Anvil encoding showing the boundary of Anvil's guarantee
+// for Bug 3 (common_cells PR #322).
+// This is a semantic example, not a claim it has been compiled.
+
+// -----------------------------------------------------------------
+// Version B — THE GAP: pointer advance NOT gated behind the channel
+// -----------------------------------------------------------------
+// Nothing here uses `send` or `recv` at all for the pointer update.
+// wr_ptr is an ordinary register that a proc can update on its own
+// schedule, with no relationship to any channel operation. Anvil's
+// type system verifies timing safety for values that flow through
+// channels — it has no way to know this particular register is
+// supposed to represent FIFO occupancy, so it does not object.
+//
+// This is the concrete version of the argument in Section 4/8.3:
+// Anvil makes the CORRECT implementation (Version A) natural to
+// write, but does not make every INCORRECT bookkeeping implementation
+// impossible — a designer who does not use send>>advance sequencing
+// for state that logically depends on a transfer can still write
+// exactly this.
+
+// Bug 3 — Anvil boundary version.
+// The pointer is ordinary state with no channel dependency.
+
+// Bug 3 — Anvil boundary version.
+// State update has no relationship to a channel operation.
+
+proc FifoWriterUngated() {
+  reg state : logic[1];
+
+  loop {
+    set state := *state >>
+    cycle 1
+  }
+}
+
+proc Top() {
+  spawn FifoWriterUngated();
+  loop { cycle 1 }
+}

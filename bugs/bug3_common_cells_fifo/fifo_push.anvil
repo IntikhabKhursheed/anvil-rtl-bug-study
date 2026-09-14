@@ -1,0 +1,32 @@
+// Bug 3 — Anvil-protected version.
+// This demonstrates the portion of the failure mode that Anvil's timing/communication model can constrain.
+// It does not establish that Anvil detects or prevents the complete FIFO bookkeeping bug.
+
+chan push_ch {
+  right slot : (logic[1]@#1)
+}
+
+proc FifoWriter(push_ep : left push_ch) {
+  reg wr_ptr : logic[1];
+
+  loop {
+    // Transfer must complete before wr_ptr advances.
+    send push_ep.slot(*wr_ptr) >>
+    cycle 1
+  }
+}
+
+proc FifoReader(push_ep : right push_ch) {
+  loop {
+    let slot = recv push_ep.slot >>
+    dprint "accepted slot"(slot) >>
+    cycle 1
+  }
+}
+
+proc Top() {
+  chan writer_ep -- reader_ep : push_ch;
+  spawn FifoWriter(writer_ep);
+  spawn FifoReader(reader_ep);
+  loop { cycle 1 }
+}
