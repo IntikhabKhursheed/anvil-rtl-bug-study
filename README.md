@@ -143,6 +143,19 @@ Two bugs are used as the primary standalone reproductions required by the study.
 
 The repository contains three standalone reproduction models.
 
+## Running the reproducers
+
+All three reproducers can be run together with:
+```bash
+./run_reproducers.sh
+```
+This requires Verilator on a Linux/WSL environment.
+
+Each reproducer was independently verified on EDA Playground
+(https://www.edaplayground.com) using Verilator 5.044, with output
+matching the results shown in the report's Section 7. This provides
+verification independent of the author's local toolchain.
+
 ---
 
 ## Anvil Comparison
