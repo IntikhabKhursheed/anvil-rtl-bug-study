@@ -11,8 +11,11 @@ module FifoWriterUngated (
     if (~rst_ni) begin
     end
   end
+  logic[0:0] thread_0_wire$2;
   logic[0:0] thread_0_wire$0;
   assign thread_0_wire$0 = state_q;
+  localparam logic[0:0] thread_0_wire$1 = 1'b1;
+  assign thread_0_wire$2 = thread_0_wire$0 ^ thread_0_wire$1;
   for (genvar i = 0; i < 3; i ++) begin : EVENTS0
     logic event_current;
     end
@@ -32,7 +35,7 @@ module FifoWriterUngated (
       _thread_0_event_counter_1_1_q <= '0;
     end else begin
       if (EVENTS0[0].event_current) begin
-        state_q[0 +: 1] <= thread_0_wire$0;
+        state_q[0 +: 1] <= thread_0_wire$2;
       end
       _init_0 <= 1'b0;
       _thread_0_event_counter_2_1_q <= _thread_0_event_counter_2_1_n;
