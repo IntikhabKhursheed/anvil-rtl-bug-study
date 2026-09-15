@@ -3,15 +3,15 @@
 // It does not establish that Anvil detects or prevents the complete FIFO bookkeeping bug.
 
 chan push_ch {
-  right slot : (logic[1]@#1)
+  right slot : (logic@#1)
 }
 
 proc FifoWriter(push_ep : left push_ch) {
-  reg wr_ptr : logic[1];
+  reg wr_ptr : logic;
 
   loop {
-    // Transfer must complete before wr_ptr advances.
     send push_ep.slot(*wr_ptr) >>
+    set wr_ptr := *wr_ptr ^ 1'b1 >>
     cycle 1
   }
 }

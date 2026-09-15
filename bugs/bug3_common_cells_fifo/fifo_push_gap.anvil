@@ -26,10 +26,10 @@
 // State update has no relationship to a channel operation.
 
 proc FifoWriterUngated() {
-  reg state : logic[1];
+  reg state : logic;
 
   loop {
-    set state := *state >>
+    set state := *state ^ 1'b1 >>
     cycle 1
   }
 }
