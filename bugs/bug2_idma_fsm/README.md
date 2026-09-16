@@ -9,20 +9,27 @@ The original `idma_error_handler` asserted `rsp_valid_o` in its response-emissio
 - `BUGGY=1` reproduces the unconditional transition. The SVA assertion fires.
 - `BUGGY=0` adds the `rsp_ready_i` guard. The same assertion passes.
 
-Run with an IEEE-1800 simulator:
-
 ```text
-iverilog -g2012 -s tb_idma93 -o idma93.vvp idma93_reproducer.sv tb_idma93.sv
-vvp idma93.vvp
+verilator --binary --assert -Wno-fatal idma93_reproducer.sv tb_idma93.sv
+./obj_dir/Vsim
 ```
 
-The transcript prints `PASS: fixed version held valid during back-pressure.` first, then reports one assertion error for the buggy instance. In Verilator the `$error` action stops simulation and exits with code 1 — that non-zero exit is intentional. It is the evidence that the property catches the pre-fix design, not a regression failure.
+The transcript prints `PASS: fixed version held valid during back-pressure.` first, then reports one assertion error for the buggy instance. Verilator's `$error` action stops simulation and exits with code 1 — that non-zero exit is intentional. It is the evidence that the property catches the pre-fix design, not a regression failure.
 
 ## Anvil
 
 `idma93_response.anvil` encodes the same response path using Anvil's two-way channel synchronisation. The key point is that `send rsp_ep.rsp(...) >> set state := ...` cannot advance the state until the send completes — meaning until the consumer has executed its matching `recv`. There is no separate `rsp_ready_i` condition for the designer to forget; the sequencing is part of the language.
 
-The Anvil source was compiled using the Anvil playground compiler (commit d138cabedbfc). The generated SystemVerilog is in `idma93_response_generated.sv`. The compiler automatically inserted `_thread_0_event_syncstate_1_q`, a register that holds `rsp_valid` high until `ack` arrives — the same logic PR #93 added by hand. `tb_anvil_idma93.sv` checks this by injecting three cycles of forced back-pressure; the SVA property never fires on the generated design.
+The generated SystemVerilog is in `idma93_response_generated.sv.anvil.sv`. In it, the compiler inserted `_thread_0_event_syncstate_1_q`, a register that holds `rsp_valid` high until `ack` arrives — the same logic PR #93 added by hand. `tb_idma93_anvil.sv` checks this by driving the generated `ErrorHandler` module directly and injecting three cycles of forced back-pressure:
+
+```text
+verilator --binary --assert -Wno-fatal \
+  idma93_response_generated.sv.anvil.sv tb_idma93_anvil.sv \
+  --top-module tb_idma93_anvil
+./obj_dir/Vtb_idma93_anvil
+```
+
+`rsp_valid` holds stable across all three held cycles and only drops after `ack` is asserted; the SVA property never fires.
 
 This is a prevention-by-semantics argument, not a claim that the original iDMA module was written or compiled in Anvil. A designer could still place an unrelated state update in a concurrent thread and introduce a different kind of bug. The guarantee here is narrower: expressing emission and transition as one sequenced process makes the specific drop-valid-before-ready mistake structurally impossible.
 
