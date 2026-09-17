@@ -235,6 +235,21 @@ anvil-rtl-bug-study/
 
 Each bug directory contains the available analysis, source references, detection properties, and reproduction material where applicable.
 
+
+## Verification methodology
+
+All reproducer and Anvil-verification commands in `run_reproducers.sh` were
+individually confirmed on EDA Playground (Verilator 5.044), matching the
+expected traces documented in each bug's README.
+
+`run_reproducers.sh` itself was separately verified locally: folder
+navigation, file paths, and command sequencing all execute correctly for
+every block, confirmed via Git Bash on Windows. A local Verilator install
+was not available at submission time, so the script has not been run
+end-to-end in a single local execution — each piece has been verified
+individually (commands via EDA Playground, script logic via local dry-run),
+but not the full combination in one environment.
+
 ---
 
 # Sources
