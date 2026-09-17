@@ -26,3 +26,12 @@ cd "$ROOT_DIR/bugs/bug5_opentitan_edn"
 verilator --binary --assert -Wno-fatal edn_csrng_if.sv tb_edn_handshake.sv
 ./obj_dir/Vsim
 echo "exit: $?"
+echo
+
+echo "=== Anvil Verification: Bug 3 Version A (channel-gated pointer) ==="
+cd "$ROOT_DIR/bugs/bug3_common_cells_fifo"
+verilator --binary --assert --timing -Wno-fatal \
+  fifo_push_generated.sv.anvil.sv tb_fifo_push_anvil.sv \
+  --top-module tb_fifo_push_anvil
+./obj_dir/Vtb_fifo_push_anvil
+echo "exit: $?"
