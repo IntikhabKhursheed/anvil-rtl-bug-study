@@ -186,6 +186,12 @@ The two instances are:
 
 They occur in different designs and through different RTL mechanisms, but both involve incorrect behavior under back-pressure.
 
+### Partially within Anvil's boundary
+
+Bug 3 sits in between. Written the right way (using Anvil's channels),
+Anvil stops the bug. Written the wrong way (as a plain register, no
+channel), Anvil compiles it with no complaint.
+
 ### Outside Anvil's boundary
 
 The remaining bugs represent different classes:
@@ -273,7 +279,7 @@ The study identifies a clear boundary for the properties examined:
 
 > **Anvil provides strong guarantees for a specific class of timing-safe communication errors, but it does not replace verification of structural or functional correctness.**
 
-The two handshake cases demonstrate where Anvil's communication model can prevent a real RTL failure. The other three cases show properties that remain outside that boundary.
+The two handshake cases demonstrate where Anvil's communication model can prevent a real RTL failure. Bug 3 sits on a partial boundary. Bugs 1 and 4 remain fully outside.
 
 This makes the study a comparison of **complementary verification techniques**, rather than a claim that one approach can detect every class of RTL bug.
 
