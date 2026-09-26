@@ -117,7 +117,7 @@ The fix introduces buffering so that the request remains stable until it is acce
 
 ---
 
-# Reproduction
+## Reproduction
 
 The study includes standalone SystemVerilog reproductions designed to isolate the relevant failure mechanisms.
 
@@ -149,6 +149,15 @@ All three reproducers can be run together with:
 ```bash
 ./run_reproducers.sh
 ```
+
+## Expected Results
+
+| Reproducer | Buggy implementation | Fixed implementation | Anvil comparison |
+| --- | --- | --- | --- |
+| iDMA PR #93 | Assertion fails because `rsp_valid_o` is withdrawn while `rsp_ready_i` is low | Assertion passes because `rsp_valid_o` remains asserted until handshake | Generated Anvil design passes under forced back-pressure |
+| common_cells PR #322 | Assertion fails because the write pointer advances while the FIFO is full | Assertion passes because pointer movement requires `valid_i && ready_o` | Partial: Anvil sequencing can express the correct order but does not prove general FIFO bookkeeping |
+| OpenTitan EDN #15469 | Assertion fails because request data changes while `valid=1` and `ready=0` | Assertion passes because data remains stable until accepted | Generated Anvil design passes under forced back-pressure |
+
 This requires Verilator on a Linux/WSL environment.
 
 Each reproducer was independently verified on EDA Playground
@@ -188,9 +197,15 @@ They occur in different designs and through different RTL mechanisms, but both i
 
 ### Partially within Anvil's boundary
 
-Bug 3 sits in between. Written the right way (using Anvil's channels),
-Anvil stops the bug. Written the wrong way (as a plain register, no
-channel), Anvil compiles it with no complaint.
+Bug 3 sits on a partial boundary. When the FIFO is structured so that
+pointer advancement occurs only after a completed Anvil channel receive,
+Anvil's sequencing discipline prevents this early-advancement pattern.
+
+However, Anvil does not identify arbitrary registers as FIFO pointers and
+does not prove general FIFO bookkeeping, occupancy, wraparound, or data
+conservation. A designer can still update a pointer independently of a
+channel operation. Anvil therefore reduces this risk through disciplined
+channel sequencing, but does not generally prove FIFO correctness.
 
 ### Outside Anvil's boundary
 
@@ -211,7 +226,7 @@ Different bug classes require different forms of checking.
 | ------------------------ | -------------------------------------------------------------- |
 | Handshake / protocol     | SVA, formal verification, protocol checking                    |
 | Width / parameterization | Linting, elaboration checks, parameterized testing             |
-| Functional omission      | Regression tests, coverage, `unique case`, formal verification |
+| Functional omission      | Operation-specific regression tests, functional coverage, enum/case-completeness lint, formal verification |
 
 The purpose of this comparison is to show where each technique provides useful coverage rather than treating any single technique as sufficient for all RTL bugs.
 
@@ -244,17 +259,14 @@ Each bug directory contains the available analysis, source references, detection
 
 ## Verification methodology
 
-All reproducer and Anvil-verification commands in `run_reproducers.sh` were
-individually confirmed on EDA Playground (Verilator 5.044), matching the
-expected traces documented in each bug's README.
+Each reproducer command and Anvil-verification command was independently
+validated on EDA Playground using Verilator 5.044. The observed outputs
+matched the expected traces documented in the corresponding bug directories.
 
-`run_reproducers.sh` itself was separately verified locally: folder
-navigation, file paths, and command sequencing all execute correctly for
-every block, confirmed via Git Bash on Windows. A local Verilator install
-was not available at submission time, so the script has not been run
-end-to-end in a single local execution — each piece has been verified
-individually (commands via EDA Playground, script logic via local dry-run),
-but not the full combination in one environment.
+`run_reproducers.sh` was checked locally in Git Bash for folder navigation,
+file paths, and command sequencing. It was not executed end-to-end on the
+author's local machine because a local Verilator installation was unavailable
+at submission time.
 
 ---
 
@@ -284,6 +296,16 @@ The two handshake cases demonstrate where Anvil's communication model can preven
 This makes the study a comparison of **complementary verification techniques**, rather than a claim that one approach can detect every class of RTL bug.
 
 ---
+## Provenance
+
+Public issue trackers, pull requests, source-code diffs, release notes,
+the Anvil paper, and Anvil documentation were used to identify and verify
+the documented RTL mechanisms.
+
+AI tools were used for search assistance, learning, SystemVerilog and SVA
+syntax checking, and debugging reproducer code. Candidate selection, source
+verification, bug classification, Anvil-scope judgments, conclusions, and
+final repository content were independently reviewed by the author.
 
 ## Related Work
 
