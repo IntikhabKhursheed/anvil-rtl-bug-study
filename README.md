@@ -14,13 +14,13 @@ RTL bugs do not all come from the same source. Some are caused by incorrect hand
 
 This study focuses on five documented bugs covering three different classes:
 
-| # | Design                    | Bug                             | Class                           | Anvil |
-| - | ------------------------- | ------------------------------- | ------------------------------- | ----- |
-| 1 | OpenTitan `keymgr_dpe`    | Width truncation                | Width / parameterization        | ❌     |
-| 2 | iDMA                      | Valid/ready FSM violation       | Handshake / protocol            | ✅     |
-| 3 | common_cells FIFO         | Pointer advances without transfer | Handshake / protocol          | ◐     |
-| 4 | CVFPU                     | Incomplete `ADDS` case handling | Functional omission             | ❌     |
-| 5 | OpenTitan EDN             | Back-pressure violation         | Handshake / protocol            | ✅     |
+| # | Design                    | Bug                               | Class                    | Anvil |
+| - | ------------------------- | --------------------------------- | ------------------------ | ----- |
+| 1 | OpenTitan `keymgr_dpe`    | Width truncation                  | Width / parameterization | ❌     |
+| 2 | iDMA                      | Valid/ready FSM violation         | Handshake / protocol     | ✅     |
+| 3 | common_cells FIFO         | Pointer advances without transfer | Handshake / protocol     | ◐     |
+| 4 | CVFPU                     | Incomplete `ADDS` case handling   | Functional omission      | ❌     |
+| 5 | OpenTitan EDN             | Back-pressure violation           | Handshake / protocol     | ✅     |
 
 The central result is that **Anvil's communication model addresses a specific class of timing and handshake errors**, while other structural and functional bug classes remain outside its type-system guarantees.
 
@@ -30,23 +30,12 @@ The central result is that **Anvil's communication model addresses a specific cl
 
 For each bug, the study investigates:
 
-1. **What happened?**
-   The original design and observable failure.
-
-2. **What caused it?**
-   The RTL mechanism responsible for the bug.
-
-3. **Why did it survive?**
-   The verification or testing gap that allowed it to remain undetected.
-
-4. **What class does it belong to?**
-   The broader bug pattern represented by the instance.
-
-5. **How can it be detected?**
-   SVA, linting, formal verification, simulation, or other appropriate techniques.
-
-6. **Can Anvil prevent it?**
-   Whether the failure falls within the guarantees provided by Anvil's type system and communication model.
+1. **What happened?** The original design and observable failure.
+2. **What caused it?** The RTL mechanism responsible for the bug.
+3. **Why did it survive?** The verification or testing gap that allowed it to remain undetected.
+4. **What class does it belong to?** The broader bug pattern represented by the instance.
+5. **How can it be detected?** SVA, linting, formal verification, simulation, or other appropriate techniques.
+6. **Can Anvil prevent it?** Whether the failure falls within the guarantees provided by Anvil's type system and communication model.
 
 ---
 
@@ -63,20 +52,16 @@ A parameterization mismatch causes a data path requiring a wider value to use a 
 
 The failure is structural and established through parameterization and elaboration rather than through runtime communication timing.
 
----
-
 ### Bug 2 — iDMA PR #93
 
 **Class:** Handshake / protocol
 **Anvil:** ✅ Prevented
 
-The iDMA error-handling FSM can advance without respecting the response interface's `ready` condition. This can cause the response transaction to be withdrawn before the receiver accepts it.
+The iDMA error-handling FSM can advance without respecting the response interface's ready condition. This can cause the response transaction to be withdrawn before the receiver accepts it.
 
 The bug is reproduced in a standalone SystemVerilog model with injected back-pressure and an assertion checking the required valid/ready behavior.
 
 **Source:** pulp-platform/iDMA PR #93.
-
----
 
 ### Bug 3 — common_cells `passthrough_stream_fifo`
 
@@ -89,8 +74,6 @@ A standalone reproducer fills a two-entry FIFO and then attempts one rejected pu
 
 **Source:** common_cells PR #322 and Issue #264.
 
----
-
 ### Bug 4 — CVFPU
 
 **Class:** Incomplete case / functional omission
@@ -101,8 +84,6 @@ A newly supported operation is not handled by all relevant case statements. The 
 **Source:** CVFPU PR #122.
 
 This represents a functional completeness problem rather than a communication-timing problem.
-
----
 
 ### Bug 5 — OpenTitan EDN
 
@@ -139,31 +120,27 @@ Apply triggering stimulus
 Check violated invariant with SVA
 ```
 
-Two bugs are used as the primary standalone reproductions required by the study.
+The study requires two standalone reproducers; this repository includes three (iDMA, common_cells, EDN).
 
-The repository contains three standalone reproduction models.
+### Running the reproducers
 
-## Running the reproducers
+All reproducers, plus the Anvil verification run, can be run together with:
 
-All three reproducers can be run together with:
 ```bash
-./run_reproducers.sh
+bash run_reproducers.sh
 ```
 
-## Expected Results
+**Requirements:** Verilator 5.x (Linux, macOS, or WSL). The script exits early with a clear message if Verilator is not installed.
+
+**Reading the output:** a non-zero exit (`exit: 134`) on a *buggy* design is expected. It means the assertion fired and the bug was caught. The Anvil verification run should print `PASS` and `exit: 0`.
+
+### Expected Results
 
 | Reproducer | Buggy implementation | Fixed implementation | Anvil comparison |
 | --- | --- | --- | --- |
 | iDMA PR #93 | Assertion fails because `rsp_valid_o` is withdrawn while `rsp_ready_i` is low | Assertion passes because `rsp_valid_o` remains asserted until handshake | Generated Anvil design passes under forced back-pressure |
 | common_cells PR #322 | Assertion fails because the write pointer advances while the FIFO is full | Assertion passes because pointer movement requires `valid_i && ready_o` | Partial: Anvil sequencing can express the correct order but does not prove general FIFO bookkeeping |
 | OpenTitan EDN #15469 | Assertion fails because request data changes while `valid=1` and `ready=0` | Assertion passes because data remains stable until accepted | Generated Anvil design passes under forced back-pressure |
-
-This requires Verilator on a Linux/WSL environment.
-
-Each reproducer was independently verified on EDA Playground
-(https://www.edaplayground.com) using Verilator 5.044, with output
-matching the results shown in the report's Section 7. This provides
-verification independent of the author's local toolchain.
 
 ---
 
@@ -197,42 +174,36 @@ They occur in different designs and through different RTL mechanisms, but both i
 
 ### Partially within Anvil's boundary
 
-Bug 3 sits on a partial boundary. When the FIFO is structured so that
-pointer advancement occurs only after a completed Anvil channel receive,
-Anvil's sequencing discipline prevents this early-advancement pattern.
+Bug 3 sits on a partial boundary. When the FIFO is structured so that pointer advancement occurs only after a completed Anvil channel receive, Anvil's sequencing discipline prevents this early-advancement pattern.
 
-However, Anvil does not identify arbitrary registers as FIFO pointers and
-does not prove general FIFO bookkeeping, occupancy, wraparound, or data
-conservation. A designer can still update a pointer independently of a
-channel operation. Anvil therefore reduces this risk through disciplined
-channel sequencing, but does not generally prove FIFO correctness.
+However, Anvil does not identify arbitrary registers as FIFO pointers and does not prove general FIFO bookkeeping, occupancy, wraparound, or data conservation. A designer can still update a pointer independently of a channel operation. Anvil therefore reduces this risk through disciplined channel sequencing, but does not generally prove FIFO correctness.
 
 ### Outside Anvil's boundary
 
 The remaining bugs represent different classes:
 
-* **Width / parameterization** — Bug 1
-* **Functional completeness** — Bug 4
+* Width / parameterization — Bug 1
+* Functional completeness — Bug 4
 
 These properties are not established by Anvil's communication type system and therefore require other verification techniques.
 
 ---
 
-# Detection Techniques
+## Detection Techniques
 
 Different bug classes require different forms of checking.
 
-| Bug Class                | Useful Detection                                               |
-| ------------------------ | -------------------------------------------------------------- |
-| Handshake / protocol     | SVA, formal verification, protocol checking                    |
-| Width / parameterization | Linting, elaboration checks, parameterized testing             |
-| Functional omission      | Operation-specific regression tests, functional coverage, enum/case-completeness lint, formal verification |
+| Bug Class | Useful Detection |
+| --- | --- |
+| Handshake / protocol | SVA, formal verification, protocol checking |
+| Width / parameterization | Linting, elaboration checks, parameterized testing |
+| Functional omission | Operation-specific regression tests, functional coverage, enum/case-completeness lint, formal verification |
 
 The purpose of this comparison is to show where each technique provides useful coverage rather than treating any single technique as sufficient for all RTL bugs.
 
 ---
 
-# Repository Structure
+## Repository Structure
 
 ```text
 anvil-rtl-bug-study/
@@ -249,30 +220,33 @@ anvil-rtl-bug-study/
 │   ├── anvil_boundary.md
 │   └── class_map.md
 │
+├── report/
+│   └── Anvil-RTL-Bug-Study.pdf
+│
+├── tools/
+│   └── anvil/                 (vendored copy of the Anvil compiler)
+│
+├── run_reproducers.sh
 ├── sources.md
-├── search-log.md
+├── search_log.md
 └── README.md
 ```
 
 Each bug directory contains the available analysis, source references, detection properties, and reproduction material where applicable.
 
+---
 
-## Verification methodology
+## Verification Methodology
 
-Each reproducer command and Anvil-verification command was independently
-validated on EDA Playground using Verilator 5.044. The observed outputs
-matched the expected traces documented in the corresponding bug directories.
+Each reproducer was validated on EDA Playground using Verilator 5.044. The observed outputs matched the expected traces documented in the corresponding bug directories.
 
-`run_reproducers.sh` was checked locally in Git Bash for folder navigation,
-file paths, and command sequencing. It was not executed end-to-end on the
-author's local machine because a local Verilator installation was unavailable
-at submission time.
+`run_reproducers.sh` was also run end to end in a clean GitHub Codespace (Ubuntu, Verilator 5.020). The three buggy designs trip their assertions (exit 134, as expected) and the Anvil verification run passes (exit 0).
 
 ---
 
-# Sources
+## Sources
 
-Primary sources and supporting references are recorded in [`sources.md`](sources.md), including:
+Primary sources and supporting references are recorded in `sources.md`, including:
 
 * OpenTitan issues and pull requests
 * iDMA pull request #93
@@ -281,40 +255,35 @@ Primary sources and supporting references are recorded in [`sources.md`](sources
 * Anvil documentation
 * Anvil research paper
 
-The search and selection process is documented separately in [`search-log.md`](search-log.md).
+The search and selection process is documented separately in `search_log.md`.
 
 ---
 
-# Key Result
+## Key Result
 
 The study identifies a clear boundary for the properties examined:
 
-> **Anvil provides strong guarantees for a specific class of timing-safe communication errors, but it does not replace verification of structural or functional correctness.**
+> Anvil provides strong guarantees for a specific class of timing-safe communication errors, but it does not replace verification of structural or functional correctness.
 
 The two handshake cases demonstrate where Anvil's communication model can prevent a real RTL failure. Bug 3 sits on a partial boundary. Bugs 1 and 4 remain fully outside.
 
 This makes the study a comparison of **complementary verification techniques**, rather than a claim that one approach can detect every class of RTL bug.
 
 ---
+
 ## Provenance
 
-Public issue trackers, pull requests, source-code diffs, release notes,
-the Anvil paper, and Anvil documentation were used to identify and verify
-the documented RTL mechanisms.
+Public issue trackers, pull requests, source-code diffs, release notes, the Anvil paper, and Anvil documentation were used to identify and verify the documented RTL mechanisms.
 
-AI tools were used for search assistance, learning, SystemVerilog and SVA
-syntax checking, and debugging reproducer code. Candidate selection, source
-verification, bug classification, Anvil-scope judgments, conclusions, and
-final repository content were independently reviewed by the author.
+AI tools were used for search assistance, learning, SystemVerilog and SVA syntax checking, and debugging reproducer code. AI was also used to suggest wording edits to the written report. Candidate selection, source verification, bug classification, Anvil-scope judgments, and conclusions are the author's own, and every claim was checked against its cited source.
+
+---
 
 ## Related Work
 
-**Anvil paper:**
-*Anvil: A General-Purpose Timing-Safe Hardware Description Language*
-arXiv:2503.19447
+**Anvil paper:** *Anvil: A General-Purpose Timing-Safe Hardware Description Language*, arXiv:2503.19447
 
-**Anvil documentation:**
-https://docs.anvil.kisp-lab.org/
+**Anvil documentation:** https://docs.anvil.kisp-lab.org/
 
 ---
 
